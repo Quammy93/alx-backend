@@ -4,12 +4,10 @@ Main file
 '''
 
 
-def index_range(page, page_size):
-    if page <= 0 or page_size <= 0:
-        raise ValueError("Both page and page_size must be positive integers.")
+def index_range(page: int, page_size: int):
+    """Retrieves the index range from a given page and page size.
+    """
+    start = (page -1) * page_size
+    end = start + page_size
 
-    start_index = (page - 1) * page_size
-    end_index = start_index + page_size - 1
-
-    return start_index, end_index
-
+    return (start, end)

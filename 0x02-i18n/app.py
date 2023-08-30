@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-""" Simple flask app."""
-
+'''A Basic Flask app with internationalization support.
+'''
+import pytz
+from typing import Union, Dict
+from flask_babel import Babel, format_datetime
 from flask import Flask, render_template, request, g
-from flask_babel import Babel
-from config import Config
-from pytz import timezone, exceptions, utc
-from datetime import datetime
-import locale
 
-app: Flask = Flask(__name__)
+
+class Config:
+    '''A Flask Babel configuration.
+    '''
+    LANGUAGES = ["en", "fr"]
+    BABEL_DEFAULT_LOCALE = "en"
+    BABEL_DEFAULT_TIMEZONE = "UTC"
+
+
+app = Flask(__name__)
 app.config.from_object(Config)
-babel: Babel = Babel(app)
-
+app.url_map.strict_slashes = False
+babel = Babel(app)
 users = {
     1: {"name": "Balou", "locale": "fr", "timezone": "Europe/Paris"},
     2: {"name": "Beyonce", "locale": "en", "timezone": "US/Central"},
@@ -20,73 +27,64 @@ users = {
 }
 
 
-def get_user() -> dict:
-    """ Returns a user dictionary or
-        None if the ID cannot be found.
-    """
-    try:
-        return users.get(int(request.args.get('login_as')))
-    except Exception:
-        return None
+def get_user() -> Union[Dict, None]:
+    '''Collect a user based on id.
+    '''
+    login_id = request.args.get('login_as', '')
+    if login_id:
+        return users.get(int(login_id), None)
+    return None
 
 
 @app.before_request
 def before_request() -> None:
-    """ Find a user if any, and set it as a flask.global
-    """
-    user: dict = get_user()
+    '''Before each request's resolution, perform some routines.
+    '''
+    user = get_user()
     g.user = user
-    tz = timezone(get_timezone())
-    current_time: datetime = tz.localize(datetime.utcnow())
-    fmt: str = "%b %d, %Y %I:%M:%S %p"
-    g.current_time: datetime = current_time.strftime(fmt)
 
 
 @babel.localeselector
 def get_locale() -> str:
-    """ Determine the best match with our supported languages.
-    """
-    locale: str = request.args.get('locale')
-    if locale in app.config['LANGUAGES']:
+    '''Collect the locale for the web page.
+    '''
+    queries = request.query_string.decode('utf-8').split('&')
+    query_table = dict(map(
+        lambda x: (x if '=' in x else '{}='.format(x)).split('='),
+        queries,
+    ))
+    locale = query_table.get('locale', '')
+    if locale in app.config["LANGUAGES"]:
         return locale
-    if g.user:
-        locale = g.user.get('locale')
-        if locale and locale in app.config['LANGUAGES']:
-            return locale
-    # get locale from request headers
-    locale = request.headers.get('locale')
-    if locale in app.config['LANGUAGES']:
-        return locale
-    return request.accept_languages.best_match(app.config['LANGUAGES'])
+    user_details = getattr(g, 'user', None)
+    if user_details and user_details['locale'] in app.config["LANGUAGES"]:
+        return user_details['locale']
+    header_locale = request.headers.get('locale', '')
+    if header_locale in app.config["LANGUAGES"]:
+        return header_locale
+    return app.config['BABEL_DEFAULT_LOCALE']
 
 
 @babel.timezoneselector
 def get_timezone() -> str:
-    """ get time zone
-    """
-    tz: str = request.args.get('timezone', None)
-    if tz:
-        try:
-            return timezone(tz).zone
-        except exceptions.UnknownTimeZoneError:
-            pass
-    if g.user:
-        try:
-            tz = g.user.get('timezone')
-            return timezone(tz).zone
-        except exceptions.UnknownTimeZoneError:
-            pass
-    default_tz: str = app.config['BABEL_DEFAULT_TIMEZONE']
-    return default_tz
+    '''Collect the timezone for a web page.
+    '''
+    timezone = request.args.get('timezone', '').strip()
+    if not timezone and g.user:
+        timezone = g.user['timezone']
+    try:
+        return pytz.timezone(timezone).zone
+    except pytz.exceptions.UnknownTimeZoneError:
+        return app.config['BABEL_DEFAULT_TIMEZONE']
 
 
-@app.route('/', methods=['GET'], strict_slashes=False)
-def index() -> str:
-    """ GET /
-        Return: 0-index.html
-    """
+@app.route('/')
+def get_index() -> str:
+    '''The index page.
+    '''
+    g.time = format_datetime()
     return render_template('index.html')
 
 
-if __name__ == "__main__":
-    app.run(host="localhost", port=5001)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)

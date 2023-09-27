@@ -1,36 +1,19 @@
-#!/usr/bin/yarn dev
-import { createClient, print } from 'redis';
+import redis from 'redis';
 
-const client = createClient();
+const client = redis.createClient();
 
-client.on('error', (err) => {
-  console.log('Redis client not connected to the server:', err.toString());
+client.on('error', (error) => console.error(`Redis client not connected to the server: ${error.message}`));
+client.on('connect', () => console.log('Redis client connected to the server'));
+
+const KEY = 'HolbertonSchools';
+
+const keys = ['Portland', 'Seattle', 'New York', 'Bogota', 'Cali', 'Paris'];
+const values = [50, 80, 20, 20, 40, 2];
+
+keys.forEach((key, index) => {
+    client.hset(KEY, key, values[index], redis.print);
 });
 
-const updateHash = (hashName, fieldName, fieldValue) => {
-  client.HSET(hashName, fieldName, fieldValue, print);
-};
-
-const printHash = (hashName) => {
-  client.HGETALL(hashName, (_err, reply) => console.log(reply));
-};
-
-function main() {
-  const hashObj = {
-    Portland: 50,
-    Seattle: 80,
-    'New York': 20,
-    Bogota: 20,
-    Cali: 40,
-    Paris: 2,
-  };
-  for (const [field, value] of Object.entries(hashObj)) {
-    updateHash('HolbertonSchools', field, value);
-  }
-  printHash('HolbertonSchools');
-}
-
-client.on('connect', () => {
-  console.log('Redis client connected to the server');
-  main();
+client.hgetall(KEY, (err, value) => {
+    console.log(value);
 });
